@@ -192,7 +192,7 @@ func (s *Store) GetEmail(emailID int64) (*types.Email, error) {
 	}
 
 	// Parse date
-	email.Date, err = time.Parse("2006-01-02 15:04:05", dateStr)
+	email.Date, err = time.Parse(time.RFC3339, dateStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse date: %w", err)
 	}
@@ -259,7 +259,7 @@ func (s *Store) ListFolders(accountID *int) ([]types.Folder, error) {
 		}
 
 		if lastSynced.Valid {
-			t, err := time.Parse("2006-01-02 15:04:05", lastSynced.String)
+			t, err := time.Parse(time.RFC3339, lastSynced.String)
 			if err == nil {
 				folder.LastSynced = &t
 			}
@@ -269,4 +269,24 @@ func (s *Store) ListFolders(accountID *int) ([]types.Folder, error) {
 	}
 
 	return folders, nil
+}
+
+// HasEmails checks if an account has any cached emails
+func (s *Store) HasEmails(accountID int) (bool, error) {
+	var count int
+	err := s.cache.DB().QueryRow("SELECT COUNT(*) FROM emails WHERE account_id = ?", accountID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check emails count: %w", err)
+	}
+	return count > 0, nil
+}
+
+// HasAnyEmails checks if there are any cached emails
+func (s *Store) HasAnyEmails() (bool, error) {
+	var count int
+	err := s.cache.DB().QueryRow("SELECT COUNT(*) FROM emails").Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check emails count: %w", err)
+	}
+	return count > 0, nil
 }

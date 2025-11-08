@@ -156,7 +156,7 @@ docker build -t mcp-email-server .
 ### Docker Run
 
 ```bash
-docker run -it --rm \
+docker run -it --name mcp-email-container \
   -e IMAP_HOST=imap.example.com \
   -e IMAP_PORT=993 \
   -e IMAP_USERNAME=user@example.com \
@@ -176,8 +176,10 @@ Alternatively, you can use an environment file:
 cp .env.example .env
 # Edit .env with your credentials
 # Then run:
-docker run -it --rm --env-file .env -v $(pwd)/data:/data mcp-email-server
+docker run -it --name mcp-email-container --env-file .env -v $(pwd)/data:/data mcp-email-server
 ```
+
+**Note:** The `--name` flag creates a persistent container that maintains your email cache between VS Code sessions. If you need to restart the container, use `docker restart mcp-email-container`. To completely reset the cache, stop and remove the container with `docker rm -f mcp-email-container`.
 
 ## MCP Configuration
 
@@ -237,7 +239,7 @@ Use this to run the server in a Docker container:
       "args": [
         "run",
         "-i",
-        "--rm",
+        "--name", "mcp-email-container",
         "-v", "/tmp:/data",
         "-e", "IMAP_HOST=imap.gmail.com",
         "-e", "IMAP_PORT=993",
@@ -322,7 +324,7 @@ For a cleaner Docker configuration, you can use an environment file:
       "args": [
         "run",
         "-i",
-        "--rm",
+        "--name", "mcp-email-container",
         "--env-file", "/absolute/path/to/.env",
         "-v", "/tmp:/data",
         "mcp-email-server:latest"

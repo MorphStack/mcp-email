@@ -94,8 +94,42 @@ func (t *SearchEmailsTool) Execute(params map[string]interface{}) (interface{}, 
 	// Parse account_name
 	if accountName, ok := params["account_name"].(string); ok && accountName != "" {
 		accountID, err := t.cacheStore.GetAccountID(accountName)
-		if err == nil {
-			opts.AccountID = &accountID
+		if err != nil {
+			// Account might not be in cache yet, try to sync
+			if syncErr := t.emailManager.SyncAccount(accountName, ""); syncErr != nil {
+				return nil, fmt.Errorf("failed to sync account: %w", syncErr)
+			}
+			accountID, err = t.cacheStore.GetAccountID(accountName)
+			if err != nil {
+				return nil, fmt.Errorf("account not found: %s", accountName)
+			}
+		}
+		opts.AccountID = &accountID
+
+		// Check if account has cached emails, if not, sync
+		hasEmails, err := t.cacheStore.HasEmails(accountID)
+		if err != nil {
+			t.logger.WithError(err).Warn("Failed to check if account has emails")
+		} else if !hasEmails {
+			t.logger.WithField("account", accountName).Info("No cached emails found, syncing account")
+			if err := t.emailManager.SyncAccount(accountName, ""); err != nil {
+				t.logger.WithError(err).WithField("account", accountName).Warn("Failed to sync account for search")
+				// Continue with search even if sync fails
+			}
+		}
+	} else {
+		// No account specified, check if any emails are cached
+		hasAnyEmails, err := t.cacheStore.HasAnyEmails()
+		if err != nil {
+			t.logger.WithError(err).Warn("Failed to check if any emails are cached")
+		} else if !hasAnyEmails {
+			// Sync all accounts
+			t.logger.Info("No cached emails found, syncing all accounts")
+			for _, accountName := range t.config.AccountNames() {
+				if err := t.emailManager.SyncAccount(accountName, ""); err != nil {
+					t.logger.WithError(err).WithField("account", accountName).Warn("Failed to sync account")
+				}
+			}
 		}
 	}
 

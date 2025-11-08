@@ -1,12 +1,14 @@
 package email
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"io"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
+	"github.com/jhillyerd/enmime"
 	"github.com/sirupsen/logrus"
 
 	"github.com/brandon/mcp-email/internal/config"
@@ -51,6 +53,7 @@ func (c *IMAPClient) Connect() error {
 
 	// Login
 	if err := c.client.Login(c.config.IMAPUsername, c.config.IMAPPassword); err != nil {
+		c.logger.WithError(err).Error("Failed to login to IMAP server")
 		c.client.Logout() //nolint:errcheck
 		c.client = nil
 		return fmt.Errorf("failed to login to IMAP server: %w", err)
@@ -145,9 +148,8 @@ func (c *IMAPClient) FetchEmails(folderName string, from, to uint32) ([]*types.E
 		seqSet.AddRange(from, to)
 	}
 
-	// Fetch messages (using UID for consistency)
-	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, imap.FetchUid, section.FetchItem()}
+	// Fetch messages (using RFC822 for full message content)
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchInternalDate, imap.FetchUid, imap.FetchRFC822}
 
 	messages := make(chan *imap.Message, 10)
 	done := make(chan error, 1)
@@ -203,13 +205,12 @@ func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) *types.E
 	// Parse flags
 	email.Flags = append(email.Flags, msg.Flags...)
 
-	// Parse body if available (simplified - full body parsing can be enhanced later)
+	// Parse body using RFC822 content with enmime
 	if msg.Body != nil {
-		// msg.Body is a map of BodySectionName to Literal
-		// Get the body section
-		section := &imap.BodySectionName{}
-		if literal, ok := msg.Body[section]; ok {
-			// Read body into buffer
+		// Try to get the main body content (RFC822)
+		if literal, ok := msg.Body[nil]; ok {
+			c.logger.Debug("Reading main body content")
+			// Read the complete message
 			bodyBytes := make([]byte, 0, 8192)
 			buf := make([]byte, 1024)
 			for {
@@ -221,11 +222,35 @@ func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) *types.E
 					break
 				}
 				if err != nil {
+					c.logger.WithError(err).Error("Error reading body")
 					break
 				}
 			}
-			email.BodyText = string(bodyBytes)
+
+			c.logger.WithField("body_size", len(bodyBytes)).Debug("Body bytes read")
+			if len(bodyBytes) > 0 {
+				c.logger.WithField("body_preview", string(bodyBytes[:min(200, len(bodyBytes))])).Debug("Body preview")
+			}
+
+			// Parse the email using enmime
+			env, err := enmime.ReadEnvelope(bytes.NewReader(bodyBytes))
+			if err == nil {
+				email.BodyText = env.Text
+				email.BodyHTML = env.HTML
+				c.logger.WithFields(logrus.Fields{
+					"text_len": len(env.Text),
+					"html_len": len(env.HTML),
+				}).Debug("Successfully parsed email with enmime")
+			} else {
+				c.logger.WithError(err).Error("Failed to parse email with enmime")
+				// Fallback to raw body if parsing fails
+				email.BodyText = string(bodyBytes)
+			}
+		} else {
+			c.logger.Error("No main body section found")
 		}
+	} else {
+		c.logger.Error("Message body is nil")
 	}
 
 	return email

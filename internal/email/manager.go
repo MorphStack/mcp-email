@@ -140,3 +140,8 @@ func (m *Manager) SendEmail(accountName string, msg *EmailMessage) error {
 func (m *Manager) Close() error {
 	return m.accountManager.Close()
 }
+
+// GetAccount returns an account by name
+func (m *Manager) GetAccount(name string) (*Account, error) {
+	return m.accountManager.GetAccount(name)
+}

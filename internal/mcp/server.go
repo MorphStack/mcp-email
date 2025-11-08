@@ -65,9 +65,11 @@ func (s *Server) Run(ctx context.Context) error {
 			}
 
 			resp := s.handleRequest(req)
-			if err := encoder.Encode(resp); err != nil {
-				s.logger.WithError(err).Error("Failed to encode response")
-				continue
+			if resp != nil {
+				if err := encoder.Encode(resp); err != nil {
+					s.logger.WithError(err).Error("Failed to encode response")
+					continue
+				}
 			}
 		}
 	}
@@ -97,6 +99,11 @@ func (s *Server) handleRequest(req map[string]interface{}) map[string]interface{
 				},
 			},
 		}
+	}
+
+	// Handle notifications/initialized
+	if method == "notifications/initialized" {
+		return nil
 	}
 
 	// Handle tools/list request
