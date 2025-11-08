@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
 	"github.com/sirupsen/logrus"
+	_ "modernc.org/sqlite"
 )
 
 // Cache represents the SQLite cache
@@ -69,4 +69,3 @@ func (c *Cache) Close() error {
 func (c *Cache) DB() *sql.DB {
 	return c.db
 }
-

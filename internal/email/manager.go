@@ -3,15 +3,15 @@ package email
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
-	"github.com/sirupsen/logrus"
 )
 
 // Manager manages email operations
 type Manager struct {
 	accountManager *AccountManager
-	cache          *cache.Cache
 	store          *cache.Store
 	config         *config.Config
 	logger         *logrus.Logger
@@ -140,4 +140,3 @@ func (m *Manager) SendEmail(accountName string, msg *EmailMessage) error {
 func (m *Manager) Close() error {
 	return m.accountManager.Close()
 }
-

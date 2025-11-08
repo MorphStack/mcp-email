@@ -7,11 +7,12 @@ import (
 	"io"
 	"os"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/internal/email"
 	"github.com/brandon/mcp-email/internal/tools"
-	"github.com/sirupsen/logrus"
 )
 
 // Server represents the MCP server
@@ -63,7 +64,7 @@ func (s *Server) Run(ctx context.Context) error {
 				continue
 			}
 
-			resp := s.handleRequest(ctx, req)
+			resp := s.handleRequest(req)
 			if err := encoder.Encode(resp); err != nil {
 				s.logger.WithError(err).Error("Failed to encode response")
 				continue
@@ -73,9 +74,12 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // handleRequest processes an MCP request
-func (s *Server) handleRequest(ctx context.Context, req map[string]interface{}) map[string]interface{} {
-	method, _ := req["method"].(string)
-	id, _ := req["id"]
+func (s *Server) handleRequest(req map[string]interface{}) map[string]interface{} {
+	method, ok := req["method"].(string)
+	if !ok {
+		method = ""
+	}
+	id := req["id"]
 
 	// Handle initialize request
 	if method == "initialize" {
@@ -109,9 +113,18 @@ func (s *Server) handleRequest(ctx context.Context, req map[string]interface{}) 
 
 	// Handle tools/call request
 	if method == "tools/call" {
-		params, _ := req["params"].(map[string]interface{})
-		toolName, _ := params["name"].(string)
-		arguments, _ := params["arguments"].(map[string]interface{})
+		params, ok := req["params"].(map[string]interface{})
+		if !ok {
+			params = nil
+		}
+		toolName, ok := params["name"].(string)
+		if !ok {
+			toolName = ""
+		}
+		arguments, ok := params["arguments"].(map[string]interface{})
+		if !ok {
+			arguments = nil
+		}
 
 		tool, exists := s.tools.GetTool(toolName)
 		if !exists {
@@ -167,4 +180,3 @@ func (s *Server) handleRequest(ctx context.Context, req map[string]interface{}) 
 		},
 	}
 }
-

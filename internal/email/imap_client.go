@@ -5,26 +5,27 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/brandon/mcp-email/internal/config"
-	"github.com/brandon/mcp-email/pkg/types"
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 	"github.com/sirupsen/logrus"
+
+	"github.com/brandon/mcp-email/internal/config"
+	"github.com/brandon/mcp-email/pkg/types"
 )
 
 // IMAPClient wraps an IMAP client connection
 type IMAPClient struct {
-	config   *config.AccountConfig
-	client   *client.Client
-	logger   *logrus.Logger
+	config    *config.AccountConfig
+	client    *client.Client
+	logger    *logrus.Logger
 	connected bool
 }
 
 // NewIMAPClient creates a new IMAP client (does not connect immediately)
 func NewIMAPClient(cfg *config.AccountConfig) (*IMAPClient, error) {
 	return &IMAPClient{
-		config:   cfg,
-		logger:   logrus.New(),
+		config:    cfg,
+		logger:    logrus.New(),
 		connected: false,
 	}, nil
 }
@@ -36,10 +37,11 @@ func (c *IMAPClient) Connect() error {
 	}
 
 	addr := fmt.Sprintf("%s:%d", c.config.IMAPHost, c.config.IMAPPort)
-	
+
 	// Connect to server
 	cl, err := client.DialTLS(addr, &tls.Config{
 		ServerName: c.config.IMAPHost,
+		MinVersion: tls.VersionTLS12,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect to IMAP server: %w", err)
@@ -49,7 +51,7 @@ func (c *IMAPClient) Connect() error {
 
 	// Login
 	if err := c.client.Login(c.config.IMAPUsername, c.config.IMAPPassword); err != nil {
-		c.client.Logout()
+		c.client.Logout() //nolint:errcheck
 		c.client = nil
 		return fmt.Errorf("failed to login to IMAP server: %w", err)
 	}
@@ -156,11 +158,7 @@ func (c *IMAPClient) FetchEmails(folderName string, from, to uint32) ([]*types.E
 
 	var emails []*types.Email
 	for msg := range messages {
-		email, err := c.parseMessage(msg, folderName)
-		if err != nil {
-			c.logger.WithError(err).Warn("Failed to parse message")
-			continue
-		}
+		email := c.parseMessage(msg, folderName)
 		emails = append(emails, email)
 	}
 
@@ -172,20 +170,20 @@ func (c *IMAPClient) FetchEmails(folderName string, from, to uint32) ([]*types.E
 }
 
 // parseMessage parses an IMAP message into our Email type
-func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) (*types.Email, error) {
+func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) *types.Email {
 	email := &types.Email{
-		UID:         msg.Uid,
-		MessageID:   msg.Envelope.MessageId,
-		Subject:     msg.Envelope.Subject,
-		Date:        msg.Envelope.Date,
-		FolderPath:  folderName,
-		Recipients:  []string{},
-		Headers:     make(map[string]string),
-		Flags:       []string{},
+		UID:        msg.Uid,
+		MessageID:  msg.Envelope.MessageId,
+		Subject:    msg.Envelope.Subject,
+		Date:       msg.Envelope.Date,
+		FolderPath: folderName,
+		Recipients: []string{},
+		Headers:    make(map[string]string),
+		Flags:      []string{},
 	}
 
 	// Parse sender
-	if msg.Envelope.From != nil && len(msg.Envelope.From) > 0 {
+	if len(msg.Envelope.From) > 0 {
 		addr := msg.Envelope.From[0]
 		email.SenderName = addr.PersonalName
 		email.SenderEmail = addr.Address()
@@ -203,9 +201,7 @@ func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) (*types.
 	}
 
 	// Parse flags
-	for _, flag := range msg.Flags {
-		email.Flags = append(email.Flags, string(flag))
-	}
+	email.Flags = append(email.Flags, msg.Flags...)
 
 	// Parse body if available (simplified - full body parsing can be enhanced later)
 	if msg.Body != nil {
@@ -232,7 +228,7 @@ func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) (*types.
 		}
 	}
 
-	return email, nil
+	return email
 }
 
 // SearchEmails searches for emails in a folder
@@ -260,4 +256,3 @@ func (c *IMAPClient) SearchEmails(folderName string, criteria *imap.SearchCriter
 func (c *IMAPClient) SetLogger(logger *logrus.Logger) {
 	c.logger = logger
 }
-

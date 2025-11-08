@@ -87,4 +87,3 @@ CREATE TRIGGER IF NOT EXISTS emails_fts_delete AFTER DELETE ON emails BEGIN
     DELETE FROM emails_fts WHERE rowid = old.id;
 END;
 `
-

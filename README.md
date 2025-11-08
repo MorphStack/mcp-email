@@ -372,6 +372,12 @@ mcp-email/
 go test ./...
 ```
 
+### Linting
+
+```bash
+golangci-lint run --timeout=5m
+```
+
 ## CI/CD
 
 This project uses GitHub Actions for continuous integration and releases.

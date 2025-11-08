@@ -7,8 +7,9 @@ import (
 	"net/smtp"
 	"strings"
 
-	"github.com/brandon/mcp-email/internal/config"
 	"github.com/sirupsen/logrus"
+
+	"github.com/brandon/mcp-email/internal/config"
 )
 
 // SMTPClient wraps an SMTP client
@@ -48,17 +49,14 @@ func NewSMTPClient(cfg *config.AccountConfig) (*SMTPClient, error) {
 // Send sends an email
 func (c *SMTPClient) Send(msg *EmailMessage) error {
 	// Create message
-	emailBytes, err := c.createMessage(msg)
-	if err != nil {
-		return fmt.Errorf("failed to create message: %w", err)
-	}
+	emailBytes := c.createMessage(msg)
 
 	// Connect to server
 	addr := fmt.Sprintf("%s:%d", c.config.SMTPHost, c.config.SMTPPort)
-	
+
 	// Determine if TLS is needed
 	useTLS := c.config.SMTPPort == 465
-	
+
 	var auth smtp.Auth
 	if c.config.SMTPPassword != "" {
 		auth = smtp.PlainAuth("", c.config.SMTPUsername, c.config.SMTPPassword, c.config.SMTPHost)
@@ -68,6 +66,7 @@ func (c *SMTPClient) Send(msg *EmailMessage) error {
 		// TLS connection (port 465)
 		conn, err := tls.Dial("tcp", addr, &tls.Config{
 			ServerName: c.config.SMTPHost,
+			MinVersion: tls.VersionTLS12,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to connect to SMTP server: %w", err)
@@ -82,36 +81,36 @@ func (c *SMTPClient) Send(msg *EmailMessage) error {
 
 		// Auth
 		if auth != nil {
-			if err := client.Auth(auth); err != nil {
-				return fmt.Errorf("failed to authenticate: %w", err)
+			if authErr := client.Auth(auth); authErr != nil {
+				return fmt.Errorf("failed to authenticate: %w", authErr)
 			}
 		}
 
 		// Set sender
-		if err := client.Mail(c.config.SMTPUsername); err != nil {
-			return fmt.Errorf("failed to set sender: %w", err)
+		if mailErr := client.Mail(c.config.SMTPUsername); mailErr != nil {
+			return fmt.Errorf("failed to set sender: %w", mailErr)
 		}
 
 		// Set recipients
 		recipients := append(append(msg.To, msg.Cc...), msg.Bcc...)
 		for _, to := range recipients {
-			if err := client.Rcpt(to); err != nil {
-				return fmt.Errorf("failed to set recipient %s: %w", to, err)
+			if rcptErr := client.Rcpt(to); rcptErr != nil {
+				return fmt.Errorf("failed to set recipient %s: %w", to, rcptErr)
 			}
 		}
 
 		// Send data
-		w, err := client.Data()
-		if err != nil {
-			return fmt.Errorf("failed to send data command: %w", err)
+		w, dataErr := client.Data()
+		if dataErr != nil {
+			return fmt.Errorf("failed to send data command: %w", dataErr)
 		}
 
-		if _, err := w.Write(emailBytes); err != nil {
-			return fmt.Errorf("failed to write message: %w", err)
+		if _, writeErr := w.Write(emailBytes); writeErr != nil {
+			return fmt.Errorf("failed to write message: %w", writeErr)
 		}
 
-		if err := w.Close(); err != nil {
-			return fmt.Errorf("failed to close data writer: %w", err)
+		if closeErr := w.Close(); closeErr != nil {
+			return fmt.Errorf("failed to close data writer: %w", closeErr)
 		}
 
 		return client.Quit()
@@ -126,42 +125,43 @@ func (c *SMTPClient) Send(msg *EmailMessage) error {
 		// Start TLS
 		if err := client.StartTLS(&tls.Config{
 			ServerName: c.config.SMTPHost,
+			MinVersion: tls.VersionTLS12,
 		}); err != nil {
 			return fmt.Errorf("failed to start TLS: %w", err)
 		}
 
 		// Auth
 		if auth != nil {
-			if err := client.Auth(auth); err != nil {
-				return fmt.Errorf("failed to authenticate: %w", err)
+			if authErr := client.Auth(auth); authErr != nil {
+				return fmt.Errorf("failed to authenticate: %w", authErr)
 			}
 		}
 
 		// Set sender
-		if err := client.Mail(c.config.SMTPUsername); err != nil {
-			return fmt.Errorf("failed to set sender: %w", err)
+		if mailErr := client.Mail(c.config.SMTPUsername); mailErr != nil {
+			return fmt.Errorf("failed to set sender: %w", mailErr)
 		}
 
 		// Set recipients
 		recipients := append(append(msg.To, msg.Cc...), msg.Bcc...)
 		for _, to := range recipients {
-			if err := client.Rcpt(to); err != nil {
-				return fmt.Errorf("failed to set recipient %s: %w", to, err)
+			if rcptErr := client.Rcpt(to); rcptErr != nil {
+				return fmt.Errorf("failed to set recipient %s: %w", to, rcptErr)
 			}
 		}
 
 		// Send data
-		w, err := client.Data()
-		if err != nil {
-			return fmt.Errorf("failed to send data command: %w", err)
+		w, dataErr := client.Data()
+		if dataErr != nil {
+			return fmt.Errorf("failed to send data command: %w", dataErr)
 		}
 
-		if _, err := w.Write(emailBytes); err != nil {
-			return fmt.Errorf("failed to write message: %w", err)
+		if _, writeErr := w.Write(emailBytes); writeErr != nil {
+			return fmt.Errorf("failed to write message: %w", writeErr)
 		}
 
-		if err := w.Close(); err != nil {
-			return fmt.Errorf("failed to close data writer: %w", err)
+		if closeErr := w.Close(); closeErr != nil {
+			return fmt.Errorf("failed to close data writer: %w", closeErr)
 		}
 
 		return client.Quit()
@@ -169,7 +169,7 @@ func (c *SMTPClient) Send(msg *EmailMessage) error {
 }
 
 // createMessage creates an email message in MIME format
-func (c *SMTPClient) createMessage(msg *EmailMessage) ([]byte, error) {
+func (c *SMTPClient) createMessage(msg *EmailMessage) []byte {
 	var buf bytes.Buffer
 
 	// Write headers manually (simpler approach)
@@ -197,11 +197,10 @@ func (c *SMTPClient) createMessage(msg *EmailMessage) ([]byte, error) {
 		buf.WriteString(msg.BodyText)
 	}
 
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
 // SetLogger sets the logger for the client
 func (c *SMTPClient) SetLogger(logger *logrus.Logger) {
 	c.logger = logger
 }
-

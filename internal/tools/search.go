@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/internal/email"
-	"github.com/sirupsen/logrus"
 )
 
 // SearchEmailsTool searches cached emails
@@ -174,4 +175,3 @@ func (t *SearchEmailsTool) Execute(params map[string]interface{}) (interface{}, 
 
 	return emailList, nil
 }
-

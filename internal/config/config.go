@@ -6,12 +6,14 @@ import (
 	"strconv"
 )
 
+const defaultAccountName = "default"
+
 // Config holds the application configuration
 type Config struct {
 	// Cache settings
-	CachePath          string
-	SearchResultLimit  int
-	LogLevel           string
+	CachePath         string
+	SearchResultLimit int
+	LogLevel          string
 
 	// Accounts
 	Accounts []AccountConfig
@@ -118,9 +120,9 @@ func loadSingleAccount() (*AccountConfig, error) {
 	}
 
 	// Default account name
-	name := getEnv("ACCOUNT_NAME", "default")
+	name := getEnv("ACCOUNT_NAME", defaultAccountName)
 	if name == "" {
-		name = "default"
+		name = defaultAccountName
 	}
 
 	return &AccountConfig{
@@ -216,7 +218,7 @@ func (c *Config) GetDefaultAccount() *AccountConfig {
 
 	// Try to find "default" account first
 	for i := range c.Accounts {
-		if c.Accounts[i].Name == "default" {
+		if c.Accounts[i].Name == defaultAccountName {
 			return &c.Accounts[i]
 		}
 	}
@@ -267,4 +269,3 @@ func (c *Config) AccountNames() []string {
 	}
 	return names
 }
-

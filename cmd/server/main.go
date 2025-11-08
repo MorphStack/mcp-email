@@ -8,11 +8,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/internal/email"
 	"github.com/brandon/mcp-email/internal/mcp"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -39,8 +40,8 @@ func main() {
 	}
 
 	// Validate configuration
-	if err := cfg.Validate(); err != nil {
-		logger.WithError(err).Fatal("Invalid configuration")
+	if valErr := cfg.Validate(); valErr != nil {
+		logger.WithError(valErr).Fatal("Invalid configuration")
 	}
 
 	// Set log level
@@ -64,8 +65,8 @@ func main() {
 
 	// Initialize accounts in cache
 	for i := range cfg.Accounts {
-		if _, err := cacheStore.UpsertAccount(&cfg.Accounts[i]); err != nil {
-			logger.WithError(err).WithField("account", cfg.Accounts[i].Name).Warn("Failed to cache account")
+		if _, upsertErr := cacheStore.UpsertAccount(&cfg.Accounts[i]); upsertErr != nil {
+			logger.WithError(upsertErr).WithField("account", cfg.Accounts[i].Name).Warn("Failed to cache account")
 		}
 	}
 

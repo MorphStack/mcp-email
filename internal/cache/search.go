@@ -129,7 +129,10 @@ func (s *Store) Search(opts SearchOptions) ([]types.EmailSummary, error) {
 		// Parse date
 		summary.Date, err = time.Parse("2006-01-02 15:04:05", dateStr)
 		if err != nil {
-			summary.Date, _ = time.Parse(time.RFC3339, dateStr)
+			summary.Date, err = time.Parse(time.RFC3339, dateStr)
+			if err != nil {
+				summary.Date = time.Time{}
+			}
 		}
 
 		// Create snippet from body
@@ -215,7 +218,10 @@ func (s *Store) SearchFTS(query string, accountID *int, limit int) ([]types.Emai
 		// Parse date
 		summary.Date, err = time.Parse("2006-01-02 15:04:05", dateStr)
 		if err != nil {
-			summary.Date, _ = time.Parse(time.RFC3339, dateStr)
+			summary.Date, err = time.Parse(time.RFC3339, dateStr)
+			if err != nil {
+				summary.Date = time.Time{}
+			}
 		}
 
 		// Create snippet
@@ -232,4 +238,3 @@ func (s *Store) SearchFTS(query string, accountID *int, limit int) ([]types.Emai
 
 	return results, nil
 }
-

@@ -3,10 +3,11 @@ package tools
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/internal/email"
-	"github.com/sirupsen/logrus"
 )
 
 // ListFoldersTool lists available email folders
@@ -53,13 +54,13 @@ func (t *ListFoldersTool) InputSchema() map[string]interface{} {
 // Execute executes the tool
 func (t *ListFoldersTool) Execute(params map[string]interface{}) (interface{}, error) {
 	var accountID *int
-	
+
 	if accountName, ok := params["account_name"].(string); ok && accountName != "" {
 		id, err := t.cacheStore.GetAccountID(accountName)
 		if err != nil {
 			// Account might not be in cache yet, try to sync
-			if err := t.emailManager.SyncAccount(accountName, ""); err != nil {
-				return nil, fmt.Errorf("failed to sync account: %w", err)
+			if syncErr := t.emailManager.SyncAccount(accountName, ""); syncErr != nil {
+				return nil, fmt.Errorf("failed to sync account: %w", syncErr)
 			}
 			id, err = t.cacheStore.GetAccountID(accountName)
 			if err != nil {
@@ -92,4 +93,3 @@ func (t *ListFoldersTool) Execute(params map[string]interface{}) (interface{}, e
 
 	return result, nil
 }
-

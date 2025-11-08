@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/internal/email"
-	"github.com/sirupsen/logrus"
 )
 
 // SendEmailTool sends a new email
@@ -172,4 +173,3 @@ func (t *SendEmailTool) Execute(params map[string]interface{}) (interface{}, err
 		"message": "Email sent successfully",
 	}, nil
 }
-

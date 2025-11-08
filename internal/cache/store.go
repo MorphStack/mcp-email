@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/pkg/types"
-	"github.com/sirupsen/logrus"
 )
 
 // Store provides methods for storing and retrieving data from the cache
@@ -100,9 +101,18 @@ func (s *Store) UpsertFolder(accountID int, name, path string, messageCount int)
 // UpsertEmail upserts an email in the cache
 func (s *Store) UpsertEmail(email *types.Email) error {
 	// Serialize recipients, headers, and flags
-	recipientsJSON, _ := json.Marshal(email.Recipients)
-	headersJSON, _ := json.Marshal(email.Headers)
-	flagsJSON, _ := json.Marshal(email.Flags)
+	recipientsJSON, err := json.Marshal(email.Recipients)
+	if err != nil {
+		return fmt.Errorf("failed to marshal recipients: %w", err)
+	}
+	headersJSON, err := json.Marshal(email.Headers)
+	if err != nil {
+		return fmt.Errorf("failed to marshal headers: %w", err)
+	}
+	flagsJSON, err := json.Marshal(email.Flags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal flags: %w", err)
+	}
 
 	query := `
 		INSERT INTO emails (account_id, folder_id, uid, message_id, subject, sender_name, sender_email, recipients, date, body_text, body_html, headers, flags)
@@ -120,7 +130,7 @@ func (s *Store) UpsertEmail(email *types.Email) error {
 			flags = excluded.flags,
 			cached_at = CURRENT_TIMESTAMP
 	`
-	_, err := s.cache.DB().Exec(query,
+	_, err = s.cache.DB().Exec(query,
 		email.AccountID,
 		email.FolderID,
 		email.UID,
@@ -188,9 +198,15 @@ func (s *Store) GetEmail(emailID int64) (*types.Email, error) {
 	}
 
 	// Deserialize JSON fields
-	json.Unmarshal([]byte(recipientsJSON), &email.Recipients)
-	json.Unmarshal([]byte(headersJSON), &email.Headers)
-	json.Unmarshal([]byte(flagsJSON), &email.Flags)
+	if err := json.Unmarshal([]byte(recipientsJSON), &email.Recipients); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal recipients: %w", err)
+	}
+	if err := json.Unmarshal([]byte(headersJSON), &email.Headers); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal headers: %w", err)
+	}
+	if err := json.Unmarshal([]byte(flagsJSON), &email.Flags); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal flags: %w", err)
+	}
 
 	return &email, nil
 }
@@ -254,4 +270,3 @@ func (s *Store) ListFolders(accountID *int) ([]types.Folder, error) {
 
 	return folders, nil
 }
-

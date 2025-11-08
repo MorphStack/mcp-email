@@ -11,9 +11,9 @@ type AccountManager struct {
 
 // Account represents an email account with IMAP and SMTP clients
 type Account struct {
-	Config   *config.AccountConfig
-	IMAP     *IMAPClient
-	SMTP     *SMTPClient
+	Config *config.AccountConfig
+	IMAP   *IMAPClient
+	SMTP   *SMTPClient
 }
 
 // NewAccountManager creates a new account manager
@@ -25,7 +25,7 @@ func NewAccountManager(cfg *config.Config) (*AccountManager, error) {
 	// Initialize accounts
 	for i := range cfg.Accounts {
 		accCfg := &cfg.Accounts[i]
-		
+
 		// Create IMAP client
 		imapClient, err := NewIMAPClient(accCfg)
 		if err != nil {
@@ -77,4 +77,3 @@ func (m *AccountManager) Close() error {
 	}
 	return nil
 }
-

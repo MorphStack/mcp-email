@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/internal/email"
-	"github.com/sirupsen/logrus"
 )
 
 // GetEmailTool retrieves a full email by ID
@@ -102,4 +103,3 @@ func (t *GetEmailTool) Execute(params map[string]interface{}) (interface{}, erro
 
 	return result, nil
 }
-

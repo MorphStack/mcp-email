@@ -1,11 +1,24 @@
 run:
   timeout: 5m
   tests: true
-  skip-dirs:
+
+issues:
+  exclude-dirs:
     - vendor
-  skip-files:
+  exclude-files:
     - ".*\\.pb\\.go$"
     - ".*\\.gen\\.go$"
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+    - path: internal/mcp/server\.go
+      text: "Error return value of .((os\\.stdout|os\\.stderr|os\\.Stdin)\\.(Read|Write|Close)|.*\\.Close|.*\\.Flush|os\\.(Remove|RemoveAll|Rename|Chmod|Chown|Chtimes)|.*\\.(Print|Printf|Println)|os\\.(Create|NewFile|Open|OpenFile)|.*\\.(Fprint|Fprintf|Fprintln))"
+      linters:
+        - errcheck
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 linters-settings:
   errcheck:
@@ -18,8 +31,6 @@ linters-settings:
     simplify: true
   goimports:
     local-prefixes: github.com/brandon/mcp-email
-  govet:
-    check-shadowing: true
   misspell:
     locale: US
   lll:
@@ -49,35 +60,17 @@ linters:
     - gocritic
     - gofmt
     - goimports
-    - golint
     - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
     - misspell
     - nakedret
-    - scopelint
     - staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-    - path: internal/mcp/server\.go
-      text: "Error return value of .((os\\.stdout|os\\.stderr|os\\.Stdin)\\.(Read|Write|Close)|.*\\.Close|.*\\.Flush|os\\.(Remove|RemoveAll|Rename|Chmod|Chown|Chtimes)|.*\\.(Print|Printf|Println)|os\\.(Create|NewFile|Open|OpenFile)|.*\\.(Fprint|Fprintf|Fprintln))"
-      linters:
-        - errcheck
-  max-issues-per-linter: 0
-  max-same-issues: 0
 

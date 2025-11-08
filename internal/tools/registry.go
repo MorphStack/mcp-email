@@ -1,19 +1,20 @@
 package tools
 
 import (
+	"github.com/sirupsen/logrus"
+
 	"github.com/brandon/mcp-email/internal/cache"
 	"github.com/brandon/mcp-email/internal/config"
 	"github.com/brandon/mcp-email/internal/email"
-	"github.com/sirupsen/logrus"
 )
 
 // Registry manages MCP tools
 type Registry struct {
-	config         *config.Config
-	logger         *logrus.Logger
-	emailManager   *email.Manager
-	cacheStore     *cache.Store
-	tools          map[string]Tool
+	config       *config.Config
+	logger       *logrus.Logger
+	emailManager *email.Manager
+	cacheStore   *cache.Store
+	tools        map[string]Tool
 }
 
 // Tool represents an MCP tool
@@ -35,15 +36,13 @@ func NewRegistry(cfg *config.Config, emailManager *email.Manager, cacheStore *ca
 	}
 
 	// Register all tools
-	if err := reg.registerTools(); err != nil {
-		return nil, err
-	}
+	reg.registerTools()
 
 	return reg, nil
 }
 
 // registerTools registers all available tools
-func (r *Registry) registerTools() error {
+func (r *Registry) registerTools() {
 	// Initialize tool implementations
 	toolList := []Tool{
 		NewListFoldersTool(r.config, r.emailManager, r.cacheStore, r.logger),
@@ -60,7 +59,6 @@ func (r *Registry) registerTools() error {
 	}
 
 	r.logger.WithField("count", len(r.tools)).Info("Registered tools")
-	return nil
 }
 
 // GetTool returns a tool by name
@@ -90,4 +88,3 @@ func (r *Registry) GetToolDefinitions() []map[string]interface{} {
 	}
 	return definitions
 }
-
