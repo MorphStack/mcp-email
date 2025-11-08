@@ -1,0 +1,137 @@
+[
+  {
+    "name": "list_folders",
+    "description": "List available mailboxes/folders for configured email accounts",
+    "arguments": [
+      {
+        "name": "account_name",
+        "type": "string",
+        "desc": "Optional: Specific account name, or all accounts if omitted"
+      }
+    ]
+  },
+  {
+    "name": "search_emails",
+    "description": "Search cached emails with flexible filters (sender, recipient, subject, body, date range)",
+    "arguments": [
+      {
+        "name": "account_name",
+        "type": "string",
+        "desc": "Optional: Filter by specific account"
+      },
+      {
+        "name": "folder",
+        "type": "string",
+        "desc": "Optional: Filter by folder/mailbox"
+      },
+      {
+        "name": "sender",
+        "type": "string",
+        "desc": "Optional: Filter by sender email/name"
+      },
+      {
+        "name": "recipient",
+        "type": "string",
+        "desc": "Optional: Filter by recipient email"
+      },
+      {
+        "name": "subject",
+        "type": "string",
+        "desc": "Optional: Filter by subject (substring match)"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "desc": "Optional: Filter by body content (full-text search)"
+      },
+      {
+        "name": "date_from",
+        "type": "string",
+        "desc": "Optional: Start date (ISO 8601 format)"
+      },
+      {
+        "name": "date_to",
+        "type": "string",
+        "desc": "Optional: End date (ISO 8601 format)"
+      },
+      {
+        "name": "limit",
+        "type": "integer",
+        "desc": "Optional: Result limit (default: 100, max: 1000)"
+      }
+    ]
+  },
+  {
+    "name": "get_email",
+    "description": "Retrieve full email by ID from cache or IMAP",
+    "arguments": [
+      {
+        "name": "email_id",
+        "type": "integer",
+        "desc": "Email ID (from search results)"
+      },
+      {
+        "name": "account_name",
+        "type": "string",
+        "desc": "Optional: Account name if needed"
+      }
+    ]
+  },
+  {
+    "name": "send_email",
+    "description": "Send a new email with support for text, HTML, attachments, CC, BCC",
+    "arguments": [
+      {
+        "name": "account_name",
+        "type": "string",
+        "desc": "Account to send from"
+      },
+      {
+        "name": "to",
+        "type": "string",
+        "desc": "Recipient email address(es) (comma-separated)"
+      },
+      {
+        "name": "cc",
+        "type": "string",
+        "desc": "Optional: CC recipients (comma-separated)"
+      },
+      {
+        "name": "bcc",
+        "type": "string",
+        "desc": "Optional: BCC recipients (comma-separated)"
+      },
+      {
+        "name": "subject",
+        "type": "string",
+        "desc": "Email subject"
+      },
+      {
+        "name": "body_text",
+        "type": "string",
+        "desc": "Optional: Plain text body"
+      },
+      {
+        "name": "body_html",
+        "type": "string",
+        "desc": "Optional: HTML body"
+      },
+      {
+        "name": "attachments",
+        "type": "array",
+        "desc": "Optional: Array of attachment paths/URLs"
+      },
+      {
+        "name": "reply_to",
+        "type": "string",
+        "desc": "Optional: Reply-To header"
+      },
+      {
+        "name": "in_reply_to",
+        "type": "string",
+        "desc": "Optional: In-Reply-To header (for replies)"
+      }
+    ]
+  }
+]
+

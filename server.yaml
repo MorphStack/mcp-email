@@ -1,0 +1,96 @@
+name: mcp-email
+image: mcp/mcp-email
+type: server
+meta:
+  category: communication
+  tags:
+    - email
+    - imap
+    - smtp
+    - communication
+about:
+  title: MCP Email Server
+  description: A Model Context Protocol server for handling SMTP/IMAP email operations. Search past emails, send new emails, and manage multiple email accounts.
+  icon: https://avatars.githubusercontent.com/u/182288589?s=200&v=4
+source:
+  project: https://github.com/brandon/mcp-email
+  commit: HEAD
+config:
+  description: Configure email account connections (IMAP/SMTP)
+  secrets:
+    - name: mcp-email.imap_password
+      env: IMAP_PASSWORD
+      example: <IMAP_APP_PASSWORD>
+    - name: mcp-email.smtp_password
+      env: SMTP_PASSWORD
+      example: <SMTP_APP_PASSWORD>
+  env:
+    - name: IMAP_HOST
+      example: imap.gmail.com
+      value: '{{mcp-email.imap_host}}'
+    - name: IMAP_PORT
+      example: "993"
+      value: '{{mcp-email.imap_port}}'
+    - name: IMAP_USERNAME
+      example: user@example.com
+      value: '{{mcp-email.imap_username}}'
+    - name: SMTP_HOST
+      example: smtp.gmail.com
+      value: '{{mcp-email.smtp_host}}'
+    - name: SMTP_PORT
+      example: "587"
+      value: '{{mcp-email.smtp_port}}'
+    - name: SMTP_USERNAME
+      example: user@example.com
+      value: '{{mcp-email.smtp_username}}'
+    - name: CACHE_PATH
+      example: /data/email_cache.db
+      value: '{{mcp-email.cache_path}}'
+    - name: SEARCH_RESULT_LIMIT
+      example: "100"
+      value: '{{mcp-email.search_result_limit}}'
+    - name: LOG_LEVEL
+      example: info
+      value: '{{mcp-email.log_level}}'
+  parameters:
+    type: object
+    properties:
+      imap_host:
+        type: string
+        description: IMAP server hostname
+      imap_port:
+        type: integer
+        description: IMAP server port (usually 993)
+        default: 993
+      imap_username:
+        type: string
+        description: IMAP username (email address)
+      smtp_host:
+        type: string
+        description: SMTP server hostname
+      smtp_port:
+        type: integer
+        description: SMTP server port (usually 587)
+        default: 587
+      smtp_username:
+        type: string
+        description: SMTP username (email address)
+      cache_path:
+        type: string
+        description: Path to SQLite cache database
+        default: /data/email_cache.db
+      search_result_limit:
+        type: integer
+        description: Default search result limit
+        default: 100
+      log_level:
+        type: string
+        description: Log level (debug, info, warn, error)
+        default: info
+        enum: [debug, info, warn, error]
+    required:
+      - imap_host
+      - imap_username
+      - smtp_host
+      - smtp_username
+

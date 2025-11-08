@@ -1,0 +1,304 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Matches semantic version tags like v1.0.0
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  validate-version:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-increment: ${{ steps.version.outputs.is-increment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version from tag
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        
+        # Validate semantic version format
+        if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "Error: Version must be in format vX.Y.Z (e.g., v1.0.0)"
+          exit 1
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Get previous tag
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        if [ -z "$PREV_TAG" ]; then
+          echo "is-increment=true" >> $GITHUB_OUTPUT
+          echo "No previous tag found, assuming first release"
+        else
+          # Extract version numbers
+          CURRENT=$(echo "$VERSION" | sed 's/v//')
+          PREV=$(echo "$PREV_TAG" | sed 's/v//')
+          
+          # Compare versions (simple comparison - could be more sophisticated)
+          CURRENT_MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+          CURRENT_MINOR=$(echo "$CURRENT" | cut -d. -f2)
+          CURRENT_PATCH=$(echo "$CURRENT" | cut -d. -f3)
+          
+          PREV_MAJOR=$(echo "$PREV" | cut -d. -f1)
+          PREV_MINOR=$(echo "$PREV" | cut -d. -f2)
+          PREV_PATCH=$(echo "$PREV" | cut -d. -f3)
+          
+          # Check if version is incremented
+          if [ "$CURRENT_MAJOR" -gt "$PREV_MAJOR" ] || \
+             ([ "$CURRENT_MAJOR" -eq "$PREV_MAJOR" ] && [ "$CURRENT_MINOR" -gt "$PREV_MINOR" ]) || \
+             ([ "$CURRENT_MAJOR" -eq "$PREV_MAJOR" ] && [ "$CURRENT_MINOR" -eq "$PREV_MINOR" ] && [ "$CURRENT_PATCH" -gt "$PREV_PATCH" ]); then
+            echo "is-increment=true" >> $GITHUB_OUTPUT
+            echo "Version $VERSION is greater than $PREV_TAG"
+          else
+            echo "is-increment=false" >> $GITHUB_OUTPUT
+            echo "Error: Version $VERSION is not greater than previous tag $PREV_TAG"
+            exit 1
+          fi
+        fi
+
+  build-binaries:
+    name: Build Binaries
+    needs: validate-version
+    if: needs.validate-version.outputs.is-increment == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache-dependency-path: go.sum
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        VERSION: ${{ needs.validate-version.outputs.version }}
+        CGO_ENABLED: 0
+      run: |
+        OUTPUT_NAME="mcp-email-server"
+        if [ "${{ matrix.goos }}" == "windows" ]; then
+          OUTPUT_NAME="${OUTPUT_NAME}.exe"
+        fi
+        go build -ldflags "-X main.version=${VERSION}" -trimpath -o "${OUTPUT_NAME}" ./cmd/server
+
+    - name: Create archive
+      shell: bash
+      run: |
+        OUTPUT_NAME="mcp-email-server"
+        ARCHIVE_NAME="mcp-email-server-${{ matrix.goos }}-${{ matrix.goarch }}"
+        if [ "${{ matrix.goos }}" == "windows" ]; then
+          OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          ARCHIVE_NAME="${ARCHIVE_NAME}.zip"
+          zip "${ARCHIVE_NAME}" "${OUTPUT_NAME}"
+        else
+          ARCHIVE_NAME="${ARCHIVE_NAME}.tar.gz"
+          tar -czf "${ARCHIVE_NAME}" "${OUTPUT_NAME}"
+        fi
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: mcp-email-server-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: |
+          mcp-email-server*
+          *.tar.gz
+          *.zip
+        retention-days: 30
+
+  build-docker:
+    name: Build Docker Image
+    needs: validate-version
+    if: needs.validate-version.outputs.is-increment == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ needs.validate-version.outputs.version }}
+
+    # Optional: Also push to Docker Hub
+    - name: Log in to Docker Hub
+      if: vars.DOCKER_HUB_USERNAME != '' && secrets.DOCKER_HUB_TOKEN != ''
+      uses: docker/login-action@v3
+      with:
+        username: ${{ vars.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+    - name: Build and push to Docker Hub
+      if: vars.DOCKER_HUB_USERNAME != '' && secrets.DOCKER_HUB_TOKEN != ''
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ vars.DOCKER_HUB_USERNAME }}/mcp-email-server:${{ needs.validate-version.outputs.version }}
+          ${{ vars.DOCKER_HUB_USERNAME }}/mcp-email-server:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ needs.validate-version.outputs.version }}
+
+  create-release:
+    name: Create GitHub Release
+    needs: [validate-version, build-binaries, build-docker]
+    if: needs.validate-version.outputs.is-increment == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p ./release-assets
+        VERSION="${{ needs.validate-version.outputs.version }}"
+        
+        # Copy and rename all archives
+        find ./artifacts -name "*.tar.gz" | while read file; do
+          FILENAME=$(basename "$file")
+          # Extract platform info and create new name with version
+          NEW_NAME="mcp-email-server-${VERSION}-${FILENAME#mcp-email-server-}"
+          cp "$file" "./release-assets/$NEW_NAME"
+        done
+        
+        find ./artifacts -name "*.zip" | while read file; do
+          FILENAME=$(basename "$file")
+          # Extract platform info and create new name with version
+          NEW_NAME="mcp-email-server-${VERSION}-${FILENAME#mcp-email-server-}"
+          cp "$file" "./release-assets/$NEW_NAME"
+        done
+        
+        echo "Release assets prepared:"
+        ls -lh ./release-assets/
+
+    - name: Generate release notes
+      id: release-notes
+      run: |
+        VERSION="${{ needs.validate-version.outputs.version }}"
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        if [ -z "$PREV_TAG" ]; then
+          NOTES="## Release $VERSION
+
+        First release of MCP Email Server.
+
+        ### Features
+        - Email search and retrieval via IMAP
+        - Send emails via SMTP
+        - Multi-account support
+        - SQLite caching with full-text search
+        - MCP protocol support for Claude Desktop and VS Code"
+        else
+          NOTES="## Release $VERSION
+
+        ### Changes since $PREV_TAG
+
+        See the [full changelog](https://github.com/${{ github.repository }}/compare/$PREV_TAG...$VERSION) for details."
+        fi
+        
+        echo "notes<<EOF" >> $GITHUB_OUTPUT
+        echo "$NOTES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.validate-version.outputs.version }}
+        name: Release ${{ needs.validate-version.outputs.version }}
+        body: ${{ steps.release-notes.outputs.notes }}
+        files: ./release-assets/*
+        draft: false
+        prerelease: ${{ contains(needs.validate-version.outputs.version, '-') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
