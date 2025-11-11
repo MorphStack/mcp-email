@@ -43,11 +43,14 @@ go.work
 # Temporary files
 tmp/
 temp/
+data/
 
 # Build artifacts
 dist/
-build/
+bin/
 
 # MCP config (user-specific)
 mcp.json
 
+server.log
+server.pid

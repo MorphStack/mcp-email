@@ -75,30 +75,67 @@ func (t *GetEmailTool) Execute(params map[string]interface{}) (interface{}, erro
 	}
 
 	// Get email from cache
-	email, err := t.cacheStore.GetEmail(emailID)
+	cachedEmail, err := t.cacheStore.GetEmail(emailID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get email: %w", err)
 	}
 
+	// If body is empty, try to re-fetch from IMAP
+	if cachedEmail.BodyText == "" && cachedEmail.BodyHTML == "" {
+		t.logger.WithField("email_id", emailID).Info("Email body is empty, re-fetching from IMAP")
+
+		// Get account config
+		account, err := t.config.GetAccountByName(cachedEmail.AccountName)
+		if err != nil {
+			t.logger.WithError(err).Warn("Could not get account config for re-fetch")
+		} else {
+			// Create IMAP client
+			imapClient, err := email.NewIMAPClient(account)
+			if err != nil {
+				t.logger.WithError(err).Warn("Could not create IMAP client for re-fetch")
+			} else {
+				imapClient.SetLogger(t.logger)
+
+				// Fetch the specific email
+				emails, err := imapClient.FetchEmails(cachedEmail.FolderPath, cachedEmail.UID, cachedEmail.UID)
+				if err != nil {
+					t.logger.WithError(err).Warn("Could not re-fetch email from IMAP")
+				} else if len(emails) > 0 {
+					// Update the cached email with the new body content
+					cachedEmail.BodyText = emails[0].BodyText
+					cachedEmail.BodyHTML = emails[0].BodyHTML
+					cachedEmail.Headers = emails[0].Headers
+
+					// Update cache using UpsertEmail
+					if err := t.cacheStore.UpsertEmail(cachedEmail); err != nil {
+						t.logger.WithError(err).Warn("Could not update email in cache")
+					} else {
+						t.logger.WithField("email_id", emailID).Info("Successfully re-fetched and updated email")
+					}
+				}
+			}
+		}
+	}
+
 	// Convert to JSON-serializable format
 	result := map[string]interface{}{
-		"id":           email.ID,
-		"account_id":   email.AccountID,
-		"account_name": email.AccountName,
-		"folder_id":    email.FolderID,
-		"folder_path":  email.FolderPath,
-		"uid":          email.UID,
-		"message_id":   email.MessageID,
-		"subject":      email.Subject,
-		"sender_name":  email.SenderName,
-		"sender_email": email.SenderEmail,
-		"recipients":   email.Recipients,
-		"date":         email.Date.Format(time.RFC3339),
-		"body_text":    email.BodyText,
-		"body_html":    email.BodyHTML,
-		"headers":      email.Headers,
-		"flags":        email.Flags,
-		"cached_at":    email.CachedAt.Format(time.RFC3339),
+		"id":           cachedEmail.ID,
+		"account_id":   cachedEmail.AccountID,
+		"account_name": cachedEmail.AccountName,
+		"folder_id":    cachedEmail.FolderID,
+		"folder_path":  cachedEmail.FolderPath,
+		"uid":          cachedEmail.UID,
+		"message_id":   cachedEmail.MessageID,
+		"subject":      cachedEmail.Subject,
+		"sender_name":  cachedEmail.SenderName,
+		"sender_email": cachedEmail.SenderEmail,
+		"recipients":   cachedEmail.Recipients,
+		"date":         cachedEmail.Date.Format(time.RFC3339),
+		"body_text":    cachedEmail.BodyText,
+		"body_html":    cachedEmail.BodyHTML,
+		"headers":      cachedEmail.Headers,
+		"flags":        cachedEmail.Flags,
+		"cached_at":    cachedEmail.CachedAt.Format(time.RFC3339),
 	}
 
 	return result, nil

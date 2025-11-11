@@ -207,32 +207,40 @@ func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) *types.E
 
 	// Parse body using RFC822 content with enmime
 	if msg.Body != nil {
-		// Try to get the main body content (RFC822)
+		c.logger.WithField("body_keys", getBodyKeys(msg.Body)).WithField("body_type", fmt.Sprintf("%T", msg.Body)).Debug("Body info")
+
+		// Try multiple ways to access the body content
+		var bodyBytes []byte
+
+		// Method 1: Try nil key (RFC822)
 		if literal, ok := msg.Body[nil]; ok {
-			c.logger.Debug("Reading main body content")
-			// Read the complete message
-			bodyBytes := make([]byte, 0, 8192)
-			buf := make([]byte, 1024)
-			for {
-				n, err := literal.Read(buf)
-				if n > 0 {
-					bodyBytes = append(bodyBytes, buf[:n]...)
-				}
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					c.logger.WithError(err).Error("Error reading body")
-					break
+			c.logger.Debug("Found nil key, reading RFC822 content")
+			bodyBytes = c.readLiteralToBytes(literal)
+		} else {
+			// Method 2: Try empty BodySectionName
+			emptySection := &imap.BodySectionName{}
+			if literal, ok := msg.Body[emptySection]; ok {
+				c.logger.Debug("Found empty section, reading content")
+				bodyBytes = c.readLiteralToBytes(literal)
+			} else {
+				// Method 3: Try any available section
+				for section, literal := range msg.Body {
+					c.logger.WithField("trying_section", fmt.Sprintf("%v", section)).Debug("Trying available section")
+					bodyBytes = c.readLiteralToBytes(literal)
+					if len(bodyBytes) > 0 {
+						break
+					}
 				}
 			}
+		}
 
+		if len(bodyBytes) > 0 {
 			c.logger.WithField("body_size", len(bodyBytes)).Debug("Body bytes read")
 			if len(bodyBytes) > 0 {
 				c.logger.WithField("body_preview", string(bodyBytes[:min(200, len(bodyBytes))])).Debug("Body preview")
 			}
 
-			// Parse the email using enmime
+			// Try to parse with enmime
 			env, err := enmime.ReadEnvelope(bytes.NewReader(bodyBytes))
 			if err == nil {
 				email.BodyText = env.Text
@@ -240,14 +248,15 @@ func (c *IMAPClient) parseMessage(msg *imap.Message, folderName string) *types.E
 				c.logger.WithFields(logrus.Fields{
 					"text_len": len(env.Text),
 					"html_len": len(env.HTML),
-				}).Debug("Successfully parsed email with enmime")
+				}).Debug("Successfully parsed with enmime")
 			} else {
-				c.logger.WithError(err).Error("Failed to parse email with enmime")
-				// Fallback to raw body if parsing fails
-				email.BodyText = string(bodyBytes)
+				// Fallback: try to extract text directly
+				bodyStr := string(bodyBytes)
+				email.BodyText = bodyStr
+				c.logger.WithError(err).Debug("Failed to parse with enmime, using raw body")
 			}
 		} else {
-			c.logger.Error("No main body section found")
+			c.logger.Error("No body content found")
 		}
 	} else {
 		c.logger.Error("Message body is nil")
@@ -280,4 +289,44 @@ func (c *IMAPClient) SearchEmails(folderName string, criteria *imap.SearchCriter
 // SetLogger sets the logger for the client
 func (c *IMAPClient) SetLogger(logger *logrus.Logger) {
 	c.logger = logger
+}
+
+// getBodyKeys returns a string representation of available body section keys
+func getBodyKeys(body map[*imap.BodySectionName]imap.Literal) []string {
+	var keys []string
+	for k := range body {
+		if k == nil {
+			keys = append(keys, "nil")
+		} else {
+			keys = append(keys, fmt.Sprintf("%v", k))
+		}
+	}
+	return keys
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// readLiteralToBytes reads content from an IMAP literal and returns bytes
+func (c *IMAPClient) readLiteralToBytes(literal imap.Literal) []byte {
+	bodyBytes := make([]byte, 0, 8192)
+	buf := make([]byte, 1024)
+	for {
+		n, err := literal.Read(buf)
+		if n > 0 {
+			bodyBytes = append(bodyBytes, buf[:n]...)
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			c.logger.WithError(err).Error("Error reading literal")
+			break
+		}
+	}
+	return bodyBytes
 }

@@ -13,10 +13,13 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Create bin directory for build output
+RUN mkdir -p bin
+
 # Build the application (CGO disabled for pure Go SQLite)
 # Accept VERSION build arg for versioning
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -ldflags "-X main.version=${VERSION}" -o mcp-email-server ./cmd/server
+RUN CGO_ENABLED=0 go build -ldflags "-X main.version=${VERSION}" -o bin/mcp-email-server ./cmd/server
 
 # Runtime stage
 FROM alpine:latest
@@ -33,8 +36,8 @@ RUN mkdir -p /data && chown -R mcpuser:mcpuser /data
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/mcp-email-server .
+# Copy binary from builder (updated path)
+COPY --from=builder /app/bin/mcp-email-server .
 
 # Change ownership
 RUN chown mcpuser:mcpuser mcp-email-server
